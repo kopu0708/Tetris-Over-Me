@@ -1,103 +1,73 @@
 using UnityEngine;
 using System.Collections.Generic;
 
-public class ShapeBlock : MonoBehaviour
+public class FallingShapeBlock : MonoBehaviour
 {
     private GridManager gridManager;
-    private Vector3 originalPosition;
-    private Quaternion originalRotation;
+    private Transform playerTransform;
 
-    // 설치 실패 시 모양(좌표 리스트)을 되돌리기 위한 백업 리스트
-    private List<Vector2Int> backupOffsets = new List<Vector2Int>();
+    [Header("낙하 설정")]
+    public float fallSpeed = 3f;
+    public float followSpeed = 3f;
 
-    [Header("블록 모양 설정 (상대 좌표)")]
+    [Header("블록 모양 설정")]
     public List<Vector2Int> occupiedOffsets = new List<Vector2Int>();
 
-    private bool isDragging = false;
+    private bool isFixed = false;
 
     void Start()
     {
         gridManager = FindObjectOfType<GridManager>();
-        originalPosition = transform.position;
-        originalRotation = transform.rotation;
+        GameObject playerObj = GameObject.FindGameObjectWithTag("Player");
+        if (playerObj != null) playerTransform = playerObj.transform;
 
-        // 시작할 때 현재 모양 백업 및 그리드 점유
-        SaveOffsetBackup();
-        SetOccupancyAtCurrentPos(true);
+        UpdateOffsetsFromChildren();
     }
 
     private void Update()
     {
-        // 드래그 중일 때만 R 키로 회전 가능
-        if (isDragging && Input.GetKeyDown(KeyCode.R))
+        if (isFixed) return;
+
+        if (Input.GetKeyDown(KeyCode.R)) RotateBlock();
+
+        MoveAndFall(); // 이제 이 함수가 아래 내용을 진짜 실행합니다.
+    }
+
+    // --- 여기서부터 함수들을 하나씩 밖으로 독립시켰습니다 ---
+
+    void MoveAndFall()
+    {
+        // 1. X축 추적 (부드러운 이동)
+        if (playerTransform != null && transform.position.y > 2.0f)
         {
-            RotateBlock();
+            float targetX = playerTransform.position.x;
+            float newX = Mathf.Lerp(transform.position.x, targetX, followSpeed * Time.deltaTime);
+
+            if (CanMoveTo(newX, transform.position.y))
+            {
+                transform.position = new Vector3(newX, transform.position.y, 0);
+            }
         }
-    }
 
-    void RotateBlock()
-    {
-        // 시각적 회전 (시계 방향 90도)
-        transform.Rotate(0, 0, -90);
+        // 2. Y축 낙하
+        float nextY = transform.position.y - (fallSpeed * Time.deltaTime);
 
-        // 데이터(좌표 리스트) 회전 공식: (x, y) -> (y, -x)
-        for (int i = 0; i < occupiedOffsets.Count; i++)
+        if (CanMoveTo(transform.position.x, nextY))
         {
-            int oldX = occupiedOffsets[i].x;
-            int oldY = occupiedOffsets[i].y;
-            occupiedOffsets[i] = new Vector2Int(oldY, -oldX);
-        }
-
-        Debug.Log("블록 회전됨");
-    }
-
-    private void OnMouseDown()
-    {
-        isDragging = true;
-
-        // 드래그 시작 시점의 위치, 회전, 모양 백업
-        originalPosition = transform.position;
-        originalRotation = transform.rotation;
-        SaveOffsetBackup();
-
-        // 현재 점유 중인 칸들을 비워줌 (이동 중에 본인과 충돌 방지)
-        SetOccupancyAtCurrentPos(false);
-    }
-
-    private void OnMouseDrag()
-    {
-        Vector3 mousePos = GetMouseWorldPos();
-        transform.position = new Vector3(mousePos.x, mousePos.y, 0);
-    }
-
-    private void OnMouseUp()
-    {
-        isDragging = false;
-
-        Vector3 relativePos = transform.position - gridManager.transform.position;
-        int rootX = Mathf.FloorToInt(relativePos.x / gridManager.cellSize);
-        int rootY = Mathf.FloorToInt(relativePos.y / gridManager.cellSize);
-
-        // 설치 가능한 위치인지 검사
-        if (CanPlaceAt(rootX, rootY))
-        {
-            SnapToGrid(rootX, rootY);
-            Debug.Log("배치 성공");
+            transform.position = new Vector3(transform.position.x, nextY, 0);
         }
         else
         {
-            // 설치 실패 시 모든 상태 복구 (위치, 시각적 회전, 좌표 리스트)
-            transform.position = originalPosition;
-            transform.rotation = originalRotation;
-            RestoreOffsetBackup();
-
-            SetOccupancyAtCurrentPos(true);
-            Debug.Log("배치 실패 - 원래 위치로 복귀");
+            SnapToGrid();
         }
     }
 
-    private bool CanPlaceAt(int rootX, int rootY)
+    bool CanMoveTo(float x, float y)
     {
+        Vector3 relativePos = new Vector3(x, y, 0) - gridManager.transform.position;
+        int rootX = Mathf.FloorToInt(relativePos.x / gridManager.cellSize);
+        int rootY = Mathf.FloorToInt(relativePos.y / gridManager.cellSize);
+
         foreach (Vector2Int offset in occupiedOffsets)
         {
             if (!gridManager.CanPlaceBlock(rootX + offset.x, rootY + offset.y))
@@ -106,59 +76,70 @@ public class ShapeBlock : MonoBehaviour
         return true;
     }
 
-    private void SetOccupancyAtCurrentPos(bool occupied)
+    void SnapToGrid()
     {
-        if (gridManager == null) return;
+        isFixed = true;
 
         Vector3 relativePos = transform.position - gridManager.transform.position;
         int rootX = Mathf.FloorToInt(relativePos.x / gridManager.cellSize);
         int rootY = Mathf.FloorToInt(relativePos.y / gridManager.cellSize);
 
-        foreach (Vector2Int offset in occupiedOffsets)
-        {
-            gridManager.SetOccupied(rootX + offset.x, rootY + offset.y, occupied);
-        }
-    }
-
-    private void SnapToGrid(int rootX, int rootY)
-    {
-        Vector3 snapPos = gridManager.transform.position +
+        transform.position = gridManager.transform.position +
             new Vector3(rootX * gridManager.cellSize + gridManager.cellSize * 0.5f,
                         rootY * gridManager.cellSize + gridManager.cellSize * 0.5f, 0);
 
-        transform.position = snapPos;
-        // 새로운 기준 위치와 회전값 저장
-        originalPosition = snapPos;
-        originalRotation = transform.rotation;
-        SaveOffsetBackup();
+        List<Transform> children = new List<Transform>();
+        foreach (Transform child in transform) children.Add(child);
 
-        SetOccupancyAtCurrentPos(true);
+        for (int i = 0; i < children.Count; i++)
+        {
+            Vector2Int offset = occupiedOffsets[i];
+            GameObject childObj = children[i].gameObject;
+            childObj.transform.SetParent(null);
+
+            gridManager.SetOccupied(rootX + offset.x, rootY + offset.y, true, childObj);
+        }
+
+        gridManager.CheckAndClearLine();
+        CheckPlayerGameOver(rootX, rootY);
+        Destroy(gameObject);
     }
 
-    // 좌표 리스트 깊은 복사 (백업용)
-    private void SaveOffsetBackup()
+    void RotateBlock()
     {
-        backupOffsets.Clear();
-        foreach (var coord in occupiedOffsets)
+        transform.Rotate(0, 0, -90);
+        for (int i = 0; i < occupiedOffsets.Count; i++)
         {
-            backupOffsets.Add(new Vector2Int(coord.x, coord.y));
+            int oldX = occupiedOffsets[i].x;
+            int oldY = occupiedOffsets[i].y;
+            occupiedOffsets[i] = new Vector2Int(oldY, -oldX);
         }
     }
 
-    // 좌표 리스트 복구
-    private void RestoreOffsetBackup()
+    private void CheckPlayerGameOver(int rootX, int rootY)
+    {
+        foreach (Vector2Int offset in occupiedOffsets)
+        {
+            Vector3 cellPos = gridManager.transform.position +
+                new Vector3((rootX + offset.x) * gridManager.cellSize + gridManager.cellSize * 0.5f,
+                            (rootY + offset.y) * gridManager.cellSize + gridManager.cellSize * 0.5f, 0);
+
+            Collider2D hit = Physics2D.OverlapCircle(cellPos, 0.4f);
+            if (hit != null && hit.CompareTag("Player"))
+            {
+                Debug.Log("플레이어가 깔렸습니다! GAME OVER");
+            }
+        }
+    }
+
+    public void UpdateOffsetsFromChildren()
     {
         occupiedOffsets.Clear();
-        foreach (var coord in backupOffsets)
+        foreach (Transform child in transform)
         {
-            occupiedOffsets.Add(new Vector2Int(coord.x, coord.y));
+            int x = Mathf.RoundToInt(child.localPosition.x);
+            int y = Mathf.RoundToInt(child.localPosition.y);
+            occupiedOffsets.Add(new Vector2Int(x, y));
         }
-    }
-
-    private Vector3 GetMouseWorldPos()
-    {
-        Vector3 mousePos = Input.mousePosition;
-        mousePos.z = -Camera.main.transform.position.z;
-        return Camera.main.ScreenToWorldPoint(mousePos);
     }
 }
