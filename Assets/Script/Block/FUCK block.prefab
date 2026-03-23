@@ -11,7 +11,7 @@ GameObject:
   - component: {fileID: 2669161467546163227}
   - component: {fileID: 8152785835398800089}
   - component: {fileID: 8944028918881091579}
-  m_Layer: 0
+  m_Layer: 6
   m_Name: Square (3)
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -149,7 +149,7 @@ GameObject:
   - component: {fileID: 7832125047114936852}
   - component: {fileID: 1496000594880078085}
   - component: {fileID: 4219085327309447187}
-  m_Layer: 0
+  m_Layer: 6
   m_Name: Square
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -287,7 +287,7 @@ GameObject:
   - component: {fileID: 8790193350318895435}
   - component: {fileID: 5210250978297724318}
   - component: {fileID: 6447569578782567003}
-  m_Layer: 0
+  m_Layer: 6
   m_Name: Square (2)
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -426,7 +426,7 @@ GameObject:
   - component: {fileID: 4826130565130330636}
   - component: {fileID: 6315164624020183847}
   - component: {fileID: 4378257106089171954}
-  m_Layer: 0
+  m_Layer: 6
   m_Name: FUCK block
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -584,7 +584,7 @@ GameObject:
   - component: {fileID: 3178202550802528859}
   - component: {fileID: -3207129706270490331}
   - component: {fileID: 7259149955253687637}
-  m_Layer: 0
+  m_Layer: 6
   m_Name: FUCK block
   m_TagString: Untagged
   m_Icon: {fileID: 0}

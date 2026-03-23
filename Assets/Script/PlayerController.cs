@@ -19,6 +19,12 @@ public class PlayerController : MonoBehaviour
     private float dashTimeLeft; // 대시 남은 시간
     private float lastDashTime; // 마지막 대시 시간
 
+    [Header("대시 파괴 설정")]
+    public float dashDestroyRadius = 0.5f; // 대시 시 파괴 범위
+    public LayerMask blocklayer; // 파괴할 블록 레이어
+    private GridManager gridManager;
+    private float lastMoveDirection = 1f; // 마지막 이동 방향 (1: 오른쪽, -1: 왼쪽)
+
     private Rigidbody2D rb;
     private float moveInput;
 
@@ -27,26 +33,32 @@ public class PlayerController : MonoBehaviour
         rb = GetComponent<Rigidbody2D>();
         rb.freezeRotation = true;
         rb.collisionDetectionMode = CollisionDetectionMode2D.Continuous;
+
+        gridManager = FindFirstObjectByType<GridManager>();
     }
 
     void Update()
     {
         // 1. 좌우 입력 받기 (A, D / 좌우 방향키)
         moveInput = Input.GetAxisRaw("Horizontal");
+        if(moveInput != 0) lastMoveDirection = moveInput; // 이동 입력이 있을 때마다 마지막 이동 방향 업데이트
 
-        if(Input.GetKeyDown(KeyCode.LeftShift) && Time.time - lastDashTime >= dashCooldown)
+        if (Input.GetKeyDown(KeyCode.LeftShift) && Time.time - lastDashTime >= dashCooldown)
         {
             Dash();
         }
         if(isDashing)
         {
             dashTimeLeft -= Time.deltaTime;
-            if(dashTimeLeft <= 0)
+
+            CheckAndBreakBlocks(); // 대시 중에 블록 파괴 체크
+
+            if (dashTimeLeft <= 0)
             {
                 isDashing = false;
                 lastDashTime = Time.time;
                 rb.gravityScale = 2; // 대시가 끝나면 중력 효과를 다시 적용
-                rb.linearVelocity = new Vector2(rb.linearVelocity.x * 0.5f, rb.velocity.y); // 대시가 끝나면 수평 속도를 0으로 만들어서 자연스럽게 멈추도록 함
+                rb.linearVelocity = new Vector2(rb.linearVelocity.x * 0.5f, rb.linearVelocity.y); // 대시가 끝나면 수평 속도를 0으로 만들어서 자연스럽게 멈추도록 함
             }
         }
         // 2. 점프 입력 (바닥에 닿아 있을 때만)
@@ -65,7 +77,7 @@ public class PlayerController : MonoBehaviour
         if(!isDashing)
         {
             // 4. 물리 이동 (velocity를 직접 제어하여 빠릿빠릿한 이동 구현)
-            rb.velocity = new Vector2(moveInput * moveSpeed, rb.velocity.y);
+            rb.linearVelocity = new Vector2(moveInput * moveSpeed, rb.linearVelocity.y);
         }
        
     }
@@ -73,7 +85,7 @@ public class PlayerController : MonoBehaviour
     private void Jump()
     {
         // 점프 시 기존 수직 속도를 0으로 초기화하면 항상 일정한 높이로 점프함
-        rb.velocity = new Vector2(rb.velocity.x, 0);
+        rb.linearVelocity = new Vector2(rb.linearVelocity.x, 0);
         rb.AddForce(Vector2.up * jumpForce, ForceMode2D.Impulse);
     }
 
@@ -95,8 +107,43 @@ public class PlayerController : MonoBehaviour
         dashTimeLeft = dashDuration;
         lastDashTime = Time.time;
 
-        float Direction = moveInput != 0 ? moveInput : 1; // 입력이 없으면 현재 바라보는 방향으로 대시
-        rb.velocity = new Vector2(Direction * dashSpeed, 0); // 대시 시 수직 속도를 0으로 만들어서 공중에서도 대시할 수 있도록 함
-        rb.gravityScale = 0; // 대시 중에는 중력 효과를 제거하여 수평으로만 이동하도록 함
+        rb.linearVelocity = new Vector2(lastMoveDirection * dashSpeed, 0);
+        rb.gravityScale = 0;
+    }
+
+    private void CheckAndBreakBlocks()
+    {
+        if (gridManager == null)
+        {
+            gridManager = FindFirstObjectByType<GridManager>();
+            if (gridManager == null)
+            {
+                Debug.LogError("[ERROR] 씬에 GridManager 오브젝트가 없습니다!");
+                return;
+            }
+        }
+
+        Vector2 breakPos = (Vector2)transform.position + new Vector2(lastMoveDirection * 0.5f, 0);
+        Collider2D hitBlock = Physics2D.OverlapCircle(breakPos, dashDestroyRadius, blocklayer);
+
+        if (hitBlock != null)
+        {
+            Debug.Log($"블록이 감지되었습니다:  + {hitBlock.name}, 레이어: {LayerMask.LayerToName(hitBlock.gameObject.layer)}");
+            if (gridManager.BreakBlockAtWorldPos(hitBlock.transform.position))
+            {
+                Debug.Log($"{hitBlock.name} 한 칸 파괴 성공!");
+                // 대시 중 중복 파괴 방지를 위해 이 프레임에서는 종료
+                return;
+            }
+        }
+    }
+
+    // 디버그용: 파괴 범위 그리기
+    private void OnDrawGizmosSelected()
+    {
+        Gizmos.color = Color.red;
+        float dir = Application.isPlaying ? lastMoveDirection : 1f;
+        Vector2 breakPos = (Vector2)transform.position + new Vector2(dir * 0.5f, 0);
+        Gizmos.DrawWireSphere(breakPos, dashDestroyRadius);
     }
 }

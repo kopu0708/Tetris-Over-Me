@@ -17,7 +17,7 @@ public class FallingShapeBlock : MonoBehaviour
 
     void Start()
     {
-        gridManager = FindObjectOfType<GridManager>();
+        gridManager = FindFirstObjectByType<GridManager>();
         GameObject playerObj = GameObject.FindGameObjectWithTag("Player");
         if (playerObj != null) playerTransform = playerObj.transform;
 
@@ -30,22 +30,24 @@ public class FallingShapeBlock : MonoBehaviour
 
         if (Input.GetKeyDown(KeyCode.R)) RotateBlock();
 
-        MoveAndFall(); // 이제 이 함수가 아래 내용을 진짜 실행합니다.
+        MoveAndFall(); 
     }
-
-    // --- 여기서부터 함수들을 하나씩 밖으로 독립시켰습니다 ---
 
     void MoveAndFall()
     {
-        // 1. X축 추적 (부드러운 이동)
-        if (playerTransform != null && transform.position.y > 2.0f)
+        // 1. X축 추적 (플레이어 위치를 기반으로 격자단위 이동)
+        if (playerTransform != null && transform.position.y > 1.0f)
         {
-            float targetX = playerTransform.position.x;
-            float newX = Mathf.Lerp(transform.position.x, targetX, followSpeed * Time.deltaTime);
+            float relativeX = playerTransform.position.x - gridManager.transform.position.x; // 플레이어 위치를 그리드 기준으로 변환
+            float gridIndexX = Mathf.FloorToInt(relativeX / gridManager.cellSize); // 가장 가까운 격자 단위로 이동
+            // 그 칸의 중앙 월드 좌표 계산
+            float targetWorldX = gridManager.transform.position.x +
+                                (gridIndexX * gridManager.cellSize) +
+                                (gridManager.cellSize * 0.5f);
 
-            if (CanMoveTo(newX, transform.position.y))
+            if (CanMoveTo(targetWorldX, transform.position.y))
             {
-                transform.position = new Vector3(newX, transform.position.y, 0);
+                transform.position = new Vector3(targetWorldX, transform.position.y, 0);
             }
         }
 
@@ -91,9 +93,10 @@ public class FallingShapeBlock : MonoBehaviour
         List<Transform> children = new List<Transform>();
         foreach (Transform child in transform) children.Add(child);
 
+
         for (int i = 0; i < children.Count; i++)
         {
-            Vector2Int offset = occupiedOffsets[i];
+            Vector2Int offset = occupiedOffsets[i]; 
             GameObject childObj = children[i].gameObject;
             childObj.transform.SetParent(null);
 
@@ -107,13 +110,58 @@ public class FallingShapeBlock : MonoBehaviour
 
     void RotateBlock()
     {
-        transform.Rotate(0, 0, -90);
-        for (int i = 0; i < occupiedOffsets.Count; i++)
+        if (gameObject.name.Contains("Square")) return;
+
+        // 1. 회전 후의 오프셋을 미리 계산
+        List<Vector2Int> nextOffsets = new List<Vector2Int>();
+        foreach (Vector2Int offset in occupiedOffsets)
         {
-            int oldX = occupiedOffsets[i].x;
-            int oldY = occupiedOffsets[i].y;
-            occupiedOffsets[i] = new Vector2Int(oldY, -oldX);
+            nextOffsets.Add(new Vector2Int(offset.y, -offset.x));
         }
+
+        // 현재 블록의 그리드 인덱스 위치 추출
+        Vector3 relativePos = transform.position - gridManager.transform.position;
+        int rootX = Mathf.FloorToInt(relativePos.x / gridManager.cellSize);
+        int rootY = Mathf.FloorToInt(relativePos.y / gridManager.cellSize);
+
+        // 2. 검사 루프: 제자리 -> 왼쪽으로 한 칸 밀기 -> 오른쪽으로 한 칸 밀기
+        if (IsValidRotation(rootX, rootY, nextOffsets))
+        {
+            ApplyRotation(nextOffsets);
+        }
+        else if (IsValidRotation(rootX - 1, rootY, nextOffsets)) // 월 킥: 왼쪽 시도
+        {
+            transform.position += Vector3.left * gridManager.cellSize;
+            ApplyRotation(nextOffsets);
+        }
+        else if (IsValidRotation(rootX + 1, rootY, nextOffsets)) // 월 킥: 오른쪽 시도
+        {
+            transform.position += Vector3.right * gridManager.cellSize;
+            ApplyRotation(nextOffsets);
+        }
+        else
+        {
+            // 모든 방향으로 밀어도 공간이 없으면 회전하지 않음
+            Debug.Log("공간이 부족하여 회전할 수 없습니다.");
+        }
+    }
+
+    // 특정 위치에서 해당 오프셋들이 유효한지(그리드 안쪽 & 비어있음) 체크
+    bool IsValidRotation(int rX, int rY, List<Vector2Int> offsets)
+    {
+        foreach (Vector2Int os in offsets)
+        {
+            if (!gridManager.CanPlaceBlock(rX + os.x, rY + os.y))
+                return false;
+        }
+        return true;
+    }
+
+    // 실제 회전 적용 및 데이터 갱신
+    void ApplyRotation(List<Vector2Int> nextOffsets)
+    {
+        transform.Rotate(0, 0, -90);
+        occupiedOffsets = nextOffsets;
     }
 
     private void CheckPlayerGameOver(int rootX, int rootY)
@@ -142,4 +190,6 @@ public class FallingShapeBlock : MonoBehaviour
             occupiedOffsets.Add(new Vector2Int(x, y));
         }
     }
+
+    
 }

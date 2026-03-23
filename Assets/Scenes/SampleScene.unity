@@ -440,7 +440,7 @@ Transform:
   m_GameObject: {fileID: 519420028}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 0, z: -10}
+  m_LocalPosition: {x: 0, y: 0, z: -20}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -599,10 +599,14 @@ MonoBehaviour:
   rayDistance: 2
   groundLayer:
     serializedVersion: 2
-    m_Bits: 1
+    m_Bits: 65
   dashSpeed: 15
   dashDuration: 0.2
   dashCooldown: 0.5
+  dashDestroyRadius: 0.5
+  blocklayer:
+    serializedVersion: 2
+    m_Bits: 0
 --- !u!58 &1222664988
 CircleCollider2D:
   m_ObjectHideFlags: 0
@@ -637,8 +641,8 @@ CircleCollider2D:
   m_UsedByEffector: 0
   m_CompositeOperation: 0
   m_CompositeOrder: 0
-  m_Offset: {x: 0, y: 0.21133333}
-  m_Radius: 0.5
+  m_Offset: {x: 0, y: 0}
+  m_Radius: 0.35
 --- !u!212 &1222664989
 SpriteRenderer:
   serializedVersion: 2
@@ -707,7 +711,7 @@ Transform:
   m_GameObject: {fileID: 1222664986}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: -0.15, y: -4.36, z: 0}
+  m_LocalPosition: {x: 0.5, y: -3.5, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:

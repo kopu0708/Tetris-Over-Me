@@ -7,7 +7,7 @@ public class GridManager : MonoBehaviour
     public float cellSize = 1f;
 
     private bool[,] isOccupied;
-    private GameObject[,] gridObjects; // 각 칸에 있는 실제 오브젝트 저장
+    private GameObject[,] gridObjects;
 
     private void Awake()
     {
@@ -15,28 +15,23 @@ public class GridManager : MonoBehaviour
         gridObjects = new GameObject[width, height];
     }
 
-    // 블록이 안착할 때 정보 등록
     public void SetOccupied(int x, int y, bool occupied, GameObject obj = null)
     {
-        if (x >= 0 && x < width && y >= 0 && y < height)
+        if (IsValidPos(x, y))
         {
             isOccupied[x, y] = occupied;
             gridObjects[x, y] = obj;
         }
     }
 
-    // 해당 칸이 비어있는지 확인
     public bool CanPlaceBlock(int x, int y)
     {
-        // 그리드 범위를 벗어나면 (바닥 아래 등) 설치 불가
         if (x < 0 || x >= width || y < 0) return false;
-        // 천장 위는 일단 허용 (생성 지점 때문)
-        if (y >= height) return true;
+        if (y >= height) return true; // 천장 위는 생성 허용
 
         return !isOccupied[x, y];
     }
 
-    // 가로줄이 꽉 찼는지 확인하고 삭제
     public void CheckAndClearLine()
     {
         for (int y = 0; y < height; y++)
@@ -45,33 +40,7 @@ public class GridManager : MonoBehaviour
             {
                 ClearLine(y);
                 ShiftLinesDown(y);
-                y--;
-            }
-        }
-    }
-    private void ShiftLinesDown(int clearedY)
-    {
-        // 지워진 줄(clearedY)의 바로 윗줄부터 가장 위(height-1)까지 검사
-        for (int y = clearedY + 1; y < height; y++)
-        {
-            for (int x = 0; x < width; x++)
-            {
-                if (isOccupied[x, y])
-                {
-                    // 1. 데이터를 한 칸 아래(y-1)로 이동
-                    isOccupied[x, y - 1] = true;
-                    gridObjects[x, y - 1] = gridObjects[x, y];
-
-                    // 2. 실제 게임 오브젝트의 위치를 한 칸 아래로 이동
-                    if (gridObjects[x, y - 1] != null)
-                    {
-                        gridObjects[x, y - 1].transform.position += Vector3.down * cellSize;
-                    }
-
-                    // 3. 원래 칸(y)은 비워줌
-                    isOccupied[x, y] = false;
-                    gridObjects[x, y] = null;
-                }
+                y--; // 줄이 내려왔으므로 현재 높이 다시 검사
             }
         }
     }
@@ -91,16 +60,77 @@ public class GridManager : MonoBehaviour
         {
             if (gridObjects[x, y] != null)
             {
-                Destroy(gridObjects[x, y]); // 실제 블록 조각 파괴
+                Destroy(gridObjects[x, y]);
             }
             isOccupied[x, y] = false;
             gridObjects[x, y] = null;
         }
-        Debug.Log($"{y}번 줄 삭제!");
     }
-    private void OnDrawGizmos() // 그리드 그리기
+
+    private void ShiftLinesDown(int clearedY)
     {
-        Gizmos.color = Color.cyan;
+        for (int y = clearedY + 1; y < height; y++)
+        {
+            for (int x = 0; x < width; x++)
+            {
+                if (isOccupied[x, y])
+                {
+                    // 데이터 한 칸 아래로 복사
+                    isOccupied[x, y - 1] = true;
+                    gridObjects[x, y - 1] = gridObjects[x, y];
+
+                    // 비주얼 이동
+                    if (gridObjects[x, y - 1] != null)
+                    {
+                        gridObjects[x, y - 1].transform.position += Vector3.down * cellSize;
+                    }
+
+                    // 원래 칸 비우기
+                    isOccupied[x, y] = false;
+                    gridObjects[x, y] = null;
+                }
+            }
+        }
+    }
+
+    public bool BreakBlockAtWorldPos(Vector3 worldPos)
+    {
+        Vector2Int gridPos = WorldToGrid(worldPos);
+
+        if (IsValidPos(gridPos.x, gridPos.y))
+        {
+            if (isOccupied[gridPos.x, gridPos.y])
+            {
+                if (gridObjects[gridPos.x, gridPos.y] != null)
+                    Destroy(gridObjects[gridPos.x, gridPos.y]);
+
+                isOccupied[gridPos.x, gridPos.y] = false;
+                gridObjects[gridPos.x, gridPos.y] = null;
+
+                return true;
+            }
+        }
+        return false;
+    }
+
+    // 헬퍼 함수: 좌표 변환
+    public Vector2Int WorldToGrid(Vector3 worldPos)
+    {
+        Vector3 relativePos = worldPos - transform.position;
+        return new Vector2Int(
+            Mathf.FloorToInt(relativePos.x / cellSize),
+            Mathf.FloorToInt(relativePos.y / cellSize)
+        );
+    }
+
+    private bool IsValidPos(int x, int y)
+    {
+        return x >= 0 && x < width && y >= 0 && y < height;
+    }
+
+    private void OnDrawGizmos()
+    {
+        Gizmos.color = new Color(0, 1, 1, 0.3f); // 약간 투명한 시안색
         for (int x = 0; x <= width; x++)
         {
             Gizmos.DrawLine(transform.position + new Vector3(x * cellSize, 0, 0),
